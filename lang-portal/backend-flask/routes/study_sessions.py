@@ -151,6 +151,68 @@ def load(app):
     except Exception as e:
       return jsonify({"error": str(e)}), 500
 
+  @app.route('/api/study-sessions', methods=['POST'])
+  @cross_origin()
+  def create_study_session():
+    try:
+      data = request.get_json()
+      
+      # Validate required fields
+      if not data or 'group_id' not in data or 'study_activity_id' not in data:
+        return jsonify({"error": "Missing required fields"}), 400
+        
+      cursor = app.db.cursor()
+      
+      # Verify group exists
+      cursor.execute('SELECT id FROM groups WHERE id = ?', [data['group_id']])
+      if not cursor.fetchone():
+        return jsonify({"error": "Group not found"}), 404
+        
+      # Verify study activity exists  
+      cursor.execute('SELECT id FROM study_activities WHERE id = ?', [data['study_activity_id']])
+      if not cursor.fetchone():
+        return jsonify({"error": "Study activity not found"}), 404
+        
+      # Insert new session
+      cursor.execute('''
+        INSERT INTO study_sessions (group_id, study_activity_id)
+        VALUES (?, ?)
+      ''', [data['group_id'], data['study_activity_id']])
+      
+      app.db.commit()
+      session_id = cursor.lastrowid
+      
+      # Get created session
+      cursor.execute('''
+        SELECT 
+          ss.id,
+          ss.group_id,
+          g.name as group_name,
+          sa.id as activity_id,
+          sa.name as activity_name,
+          ss.created_at
+        FROM study_sessions ss
+        JOIN groups g ON g.id = ss.group_id
+        JOIN study_activities sa ON sa.id = ss.study_activity_id
+        WHERE ss.id = ?
+      ''', [session_id])
+      
+      session = cursor.fetchone()
+      
+      return jsonify({
+        'id': session['id'],
+        'group_id': session['group_id'],
+        'group_name': session['group_name'],
+        'activity_id': session['activity_id'],
+        'activity_name': session['activity_name'],
+        'start_time': session['created_at'],
+        'end_time': session['created_at']
+      }), 201
+      
+    except Exception as e:
+      print(f"Error in create_study_session: {str(e)}")
+      return jsonify({"error": str(e)}), 500
+
   # todo POST /study_sessions/:id/review
 
   @app.route('/api/study-sessions/reset', methods=['POST'])
